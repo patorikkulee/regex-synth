@@ -28,12 +28,12 @@ pub fn all_sub() -> HashMap<String, i32> {
     all_sub.insert(r"1".to_owned(), COST);
     all_sub.insert(r"(\x00)*".to_owned(), COST);
     all_sub.insert(r"\x00\x00".to_owned(), COST);
-    all_sub.insert(r"(\x00)|(\x00)".to_owned(), COST);
+    all_sub.insert(r"(\x00|\x00)".to_owned(), COST);
 
     all_sub
 }
 
-pub fn find_parentheses(regexp: String) -> Vec<(usize, usize)> {
+pub fn find_parentheses(regexp: String, or_only: bool) -> Vec<(usize, usize)> {
     let mut stack: Vec<usize> = Vec::new();
     let mut indices: Vec<(usize, usize)> = Vec::new();
     let chars: Vec<char> = regexp.chars().collect();
@@ -48,10 +48,29 @@ pub fn find_parentheses(regexp: String) -> Vec<(usize, usize)> {
         }
     }
 
+    if or_only {
+        indices.retain(|(start, end)| regexp[*start..*end + 1].to_string().contains("|"));
+        indices.retain(|(start, end)| !regexp[*start + 1..*end].to_string().contains("("));
+        indices.retain(|(start, end)| !regexp[*start + 1..*end].to_string().contains(")"));
+        indices.retain(|(start, end)| !regexp[*start..*end + 2].to_string().ends_with("*"));
+    }
+
     indices
 }
 
-// pub fn IsInsideOr() {}
+pub fn is_inside_or(regexp: String, index: usize) -> bool {
+    let positions: Vec<(usize, usize)> = find_parentheses(regexp.clone(), false);
+    for (start, end) in positions {
+        if start < index && end > index {
+            let exp_frag: String = regexp[start..end + 1].to_string();
+            if exp_frag.contains("|") {
+                return true;
+            }
+        }
+    }
+
+    false
+}
 
 pub fn match_all(regexp: String, positive_set: Vec<String>) -> bool {
     positive_set
@@ -76,7 +95,7 @@ pub fn is_dead(regexp: String, positive_set: Vec<String>, negative_set: Vec<Stri
 
 pub fn unroll(regexp: String) -> String {
     let chars: Vec<char> = regexp.chars().collect();
-    let indices: Vec<(usize, usize)> = find_parentheses(regexp.clone());
+    let indices: Vec<(usize, usize)> = find_parentheses(regexp.clone(), false);
     let mut replacing: HashSet<(String, String)> = HashSet::new();
     let mut result: String = String::from(regexp.clone());
 
@@ -95,82 +114,29 @@ pub fn unroll(regexp: String) -> String {
     result
 }
 
-pub fn find_split_sets(regexp: String) -> HashMap<usize, HashMap<String, (usize, usize)>> {
-    let positions: Vec<(usize, usize)> = find_parentheses(regexp.clone());
-    let chars: Vec<char> = regexp.chars().collect();
-    let mut results: HashMap<usize, HashMap<String, (usize, usize)>> = HashMap::new();
+pub fn split(regexp: String) -> Vec<String> {
+    let mut results: Vec<String> = Vec::new();
+    let positions: Vec<(usize, usize)> = find_parentheses(regexp.clone(), true);
 
-    for (index, &c) in chars.iter().enumerate() {
-        if c == '|' {
-            let left: &(usize, usize) = positions
-                .iter()
-                .filter(|p: &&(usize, usize)| p.1 == index - 1)
-                .next()
-                .unwrap();
+    if positions.len() == 0 {
+        return vec![regexp];
+    }
 
-            let right: &(usize, usize) = positions
-                .iter()
-                .filter(|p: &&(usize, usize)| p.0 == index + 1)
-                .next()
-                // .map(|p| p.1)
-                .unwrap();
-
-            let span: (usize, usize) = (left.0, right.1);
-
-            let mut or_info: HashMap<String, (usize, usize)> = HashMap::new();
-            or_info.insert("left".to_owned(), *left);
-            or_info.insert("right".to_owned(), *right);
-            or_info.insert("span".to_owned(), span);
-
-            results.insert(index, or_info);
+    for (start, end) in positions {
+        let or_frag: Vec<String> = regexp[start + 1..end]
+            .split("|")
+            .map(|x| x.to_string())
+            .collect();
+        for x in or_frag {
+            results.push(format!("{}{}{}", &regexp[..start], x, &regexp[end + 1..]));
         }
     }
 
     results
 }
 
-pub fn split(regexp: String) -> Vec<String> {
-    let mut results: Vec<String> = Vec::new();
-    let positions: HashMap<usize, HashMap<String, (usize, usize)>> =
-        find_split_sets(regexp.clone());
-
-    if positions.len() == 0 {
-        return vec![regexp];
-    }
-
-    for (_index, ranges) in &positions {
-        let lspan: (usize, usize) = match ranges.get("left") {
-            Some((start, end)) => (*start, *end),
-            None => (0, 0),
-        };
-        let rspan: (usize, usize) = match ranges.get("right") {
-            Some((start, end)) => (*start, *end),
-            None => (0, 0),
-        };
-
-        let left_str: &String = &regexp[lspan.0..lspan.1 + 1].to_owned();
-        let right_str: &String = &regexp[rspan.0..rspan.1 + 1].to_owned();
-        // println!("{}, {}", left_str, right_str);
-
-        results.push(format!(
-            "{}{}{}",
-            &regexp[..lspan.0],
-            left_str,
-            &regexp[rspan.1 + 1..]
-        ));
-        results.push(format!(
-            "{}{}{}",
-            &regexp[..lspan.0],
-            right_str,
-            &regexp[rspan.1 + 1..]
-        ));
-    }
-
-    results
-}
-
 pub fn is_redundant(regexp: String, positive_set: Vec<String>) -> bool {
-    let results: Vec<String> = split(unroll(regexp));
+    let results: Vec<String> = split(unroll(regexp.clone()));
 
     for i in &results {
         let p_regex: String = i.replace(r"\x00", r".*");
@@ -192,11 +158,26 @@ pub fn extend(
 
     for (index, _block) in occurrences {
         for (s, cost) in &all_sub {
-            let ext_regexp: String = format!("{}{}{}", &state.0[..index], s, &state.0[index + 4..]); // \x00算四個字元哭啊
-            let extended_state: (String, i32) = (ext_regexp.clone(), state.1 + cost);
-            if !table.contains(&ext_regexp) {
-                table.insert(ext_regexp.clone());
-                pq.push(extended_state.0, extended_state.1);
+            if is_inside_or(state.0.clone(), index) && s == r"(\x00|\x00)" {
+                let ext_regexp: String = format!(
+                    "{}{}{}",
+                    &state.0[..index],
+                    r"\x00|\x00",
+                    &state.0[index + 4..]
+                );
+                let extended_state: (String, i32) = (ext_regexp.clone(), state.1 + cost);
+                if !table.contains(&ext_regexp) {
+                    table.insert(ext_regexp.clone());
+                    pq.push(extended_state.0, extended_state.1);
+                }
+            } else {
+                let ext_regexp: String =
+                    format!("{}{}{}", &state.0[..index], s, &state.0[index + 4..]); // \x00算四個字元
+                let extended_state: (String, i32) = (ext_regexp.clone(), state.1 + cost);
+                if !table.contains(&ext_regexp) {
+                    table.insert(ext_regexp.clone());
+                    pq.push(extended_state.0, extended_state.1);
+                }
             }
         }
     }

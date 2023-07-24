@@ -1,4 +1,5 @@
 mod utils;
+use std::env;
 use std::time::{Duration, Instant};
 
 struct TestCase {
@@ -27,6 +28,7 @@ impl TestCase {
 }
 
 fn main() {
+    env::set_var("RUST_BACKTRACE", "1");
     let cases: Vec<TestCase> = vec![
         // start with 0
         TestCase::new(
@@ -123,7 +125,7 @@ fn main() {
         ),
     ];
 
-    for c in cases {
+    for c in &cases[..1] {
         c.synth(false);
     }
 }
