@@ -1,5 +1,5 @@
 mod utils;
-use std::env;
+// use std::env;
 use std::time::{Duration, Instant};
 
 struct TestCase {
@@ -17,8 +17,7 @@ impl TestCase {
 
     fn synth(&self, debug: bool) -> (String, i32) {
         let start: Instant = Instant::now();
-        let state: (String, i32) =
-            utils::synth(self.positive_set.clone(), self.negative_set.clone(), debug);
+        let state: (String, i32) = utils::synth(&self.positive_set, &self.negative_set, debug);
         let elapsed: Duration = start.elapsed();
         let elapsed_secs: f32 = elapsed.as_secs_f32();
         println!("{:?}", state);
@@ -28,7 +27,7 @@ impl TestCase {
 }
 
 fn main() {
-    env::set_var("RUST_BACKTRACE", "1");
+    // env::set_var("RUST_BACKTRACE", "1");
     let cases: Vec<TestCase> = vec![
         // start with 0
         TestCase::new(
@@ -125,7 +124,7 @@ fn main() {
         ),
     ];
 
-    for c in &cases[..1] {
+    for c in &cases {
         c.synth(false);
     }
 }
