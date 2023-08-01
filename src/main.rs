@@ -134,7 +134,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test() {
+    fn start_with_0() {
         let ps: Vec<String> = vec!["01".to_string(), "01101".to_string(), "0001".to_string()];
         let ns: Vec<String> = vec!["10".to_string(), "1".to_string(), "11010".to_string()];
         let state: (String, i32) = utils::synth(&ps, &ns, false);

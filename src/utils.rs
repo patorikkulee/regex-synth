@@ -1,4 +1,3 @@
-use priority_queue::PriorityQueue;
 use regex::Regex;
 use std::collections::HashSet;
 
@@ -19,6 +18,32 @@ use std::collections::HashSet;
 //         }
 //     }
 // }
+
+pub struct Queue {
+    q: Vec<Vec<String>>,
+}
+
+impl Queue {
+    fn new(q: Vec<Vec<String>>) -> Queue {
+        Queue { q }
+    }
+
+    fn pop(&mut self) -> (String, i32) {
+        let mut cost: i32 = 0;
+        while self.q[cost.abs() as usize].is_empty() {
+            cost += 1;
+        }
+        (self.q[cost.abs() as usize].remove(0), -cost)
+    }
+
+    fn push(&mut self, regexp: String, cost: i32) {
+        self.q[cost.abs() as usize].push(regexp)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.q.iter().all(|v| v.is_empty())
+    }
+}
 
 pub fn find_parentheses(regexp: &String, or_only: bool) -> Vec<(usize, usize)> {
     let mut stack: Vec<usize> = Vec::new();
@@ -137,11 +162,7 @@ pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
 }
 */
 
-pub fn extend(
-    pq: &mut PriorityQueue<String, i32>,
-    state: (String, i32),
-    table: &mut HashSet<String>,
-) {
+pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>) {
     let occurrences: Vec<(usize, &str)> = state.0.match_indices(r"\x00").collect();
     let all_sub: Vec<(&'static str, i32)> = vec![
         (r"0", -1),
@@ -176,14 +197,14 @@ pub fn extend(
 
 pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> (String, i32) {
     let (init_cost, init_regexp) = (0, String::from(r"^\x00$"));
-    let mut pq: PriorityQueue<String, i32> = PriorityQueue::new();
+    let mut pq: Queue = Queue::new(vec![vec![]; 100]);
     let (mut total, mut dead, mut redundant) = (0, 0, 0);
     let mut table: HashSet<String> = HashSet::new();
 
     pq.push(init_regexp, init_cost);
     while !pq.is_empty() {
-        let curr_state: Option<(String, i32)> = pq.pop();
-        let curr_regexp: &String = &curr_state.clone().unwrap().0;
+        let curr_state: (String, i32) = pq.pop();
+        let curr_regexp: &String = &curr_state.0;
         if debug {
             println!("{}", curr_regexp);
         }
@@ -191,14 +212,14 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
         if !curr_regexp.contains(r"\x00") {
             if match_all(&curr_regexp, &positive_set) && match_none(&curr_regexp, &negative_set) {
                 println!("Total: {}, Dead: {}, Redundant: {}", total, dead, redundant);
-                return curr_state.clone().unwrap();
+                return curr_state;
             }
         // } else if is_dead(&curr_regexp, &positive_set, &negative_set) {
         //     dead += 1;
         // } else if is_redundant(&curr_regexp, &positive_set) {
         //     redundant += 1;
         } else {
-            extend(&mut pq, curr_state.unwrap(), &mut table);
+            extend(&mut pq, curr_state, &mut table);
         }
         total += 1;
     }
