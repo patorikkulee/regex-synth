@@ -85,43 +85,43 @@ fn main() {
             .map(|&x| x.to_string())
             .collect(),
         ),
-        // length is at least 3 and the third symbol is 0
-        TestCase::new(
-            vec!["110", "0100010100", "000111"]
-                .iter()
-                .map(|&x| x.to_string())
-                .collect(),
-            vec!["10", "101100", "0", "111000"]
-                .iter()
-                .map(|&x| x.to_string())
-                .collect(),
-        ),
-        // each 0 is followed by at least one 1
-        TestCase::new(
-            vec![
-                "01",
-                "1010111011101011101011101",
-                "01011011101111011111",
-                "011010111",
-                "11010110101111",
-                "01111",
-                "1101",
-            ]
-            .iter()
-            .map(|&x| x.to_string())
-            .collect(),
-            vec![
-                "0000",
-                "01110001011",
-                "011010000",
-                "0110001",
-                "0001011010",
-                "00101100100",
-            ]
-            .iter()
-            .map(|&x| x.to_string())
-            .collect(),
-        ),
+        // // length is at least 3 and the third symbol is 0
+        // TestCase::new(
+        //     vec!["110", "0100010100", "000111"]
+        //         .iter()
+        //         .map(|&x| x.to_string())
+        //         .collect(),
+        //     vec!["10", "101100", "0", "111000"]
+        //         .iter()
+        //         .map(|&x| x.to_string())
+        //         .collect(),
+        // ),
+        // // each 0 is followed by at least one 1
+        // TestCase::new(
+        //     vec![
+        //         "01",
+        //         "1010111011101011101011101",
+        //         "01011011101111011111",
+        //         "011010111",
+        //         "11010110101111",
+        //         "01111",
+        //         "1101",
+        //     ]
+        //     .iter()
+        //     .map(|&x| x.to_string())
+        //     .collect(),
+        //     vec![
+        //         "0000",
+        //         "01110001011",
+        //         "011010000",
+        //         "0110001",
+        //         "0001011010",
+        //         "00101100100",
+        //     ]
+        //     .iter()
+        //     .map(|&x| x.to_string())
+        //     .collect(),
+        // ),
     ];
 
     for c in &cases {

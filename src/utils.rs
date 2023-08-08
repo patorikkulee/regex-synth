@@ -45,6 +45,7 @@ impl Queue {
     }
 }
 
+#[inline(never)]
 pub fn find_parentheses(regexp: &String, or_only: bool) -> Vec<(usize, usize)> {
     let mut stack: Vec<usize> = Vec::new();
     let mut indices: Vec<(usize, usize)> = Vec::new();
@@ -70,6 +71,7 @@ pub fn find_parentheses(regexp: &String, or_only: bool) -> Vec<(usize, usize)> {
     indices
 }
 
+#[inline(never)]
 pub fn is_inside_or(regexp: &String, index: usize) -> bool {
     let positions: Vec<(usize, usize)> = find_parentheses(&regexp, false);
     for (start, end) in positions {
@@ -83,6 +85,7 @@ pub fn is_inside_or(regexp: &String, index: usize) -> bool {
     false
 }
 
+#[inline(never)]
 pub fn match_all(regexp: &String, positive_set: &Vec<String>) -> bool {
     positive_set
         .iter()
@@ -162,6 +165,7 @@ pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
 }
 */
 
+#[inline(never)]
 pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>) {
     let occurrences: Vec<(usize, &str)> = state.0.match_indices(r"\x00").collect();
     let all_sub: Vec<(&'static str, i32)> = vec![
@@ -195,6 +199,7 @@ pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>)
     }
 }
 
+#[inline(never)]
 pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> (String, i32) {
     let (init_cost, init_regexp) = (0, String::from(r"^\x00$"));
     let mut pq: Queue = Queue::new(vec![vec![]; 100]);
