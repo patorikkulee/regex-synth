@@ -1,3 +1,7 @@
+use flamer::flame;
+use rand::Rng;
+#[allow(dead_code)]
+use random_string::generate;
 use regex::Regex;
 use std::collections::HashSet;
 
@@ -46,6 +50,7 @@ impl Queue {
 }
 
 #[inline(never)]
+#[flame]
 pub fn find_parentheses(regexp: &String, or_only: bool) -> Vec<(usize, usize)> {
     let mut stack: Vec<usize> = Vec::new();
     let mut indices: Vec<(usize, usize)> = Vec::new();
@@ -71,7 +76,46 @@ pub fn find_parentheses(regexp: &String, or_only: bool) -> Vec<(usize, usize)> {
     indices
 }
 
+/*
 #[inline(never)]
+#[flame]
+pub fn find_parentheses(regexp: &str, or_only: bool) -> Vec<(usize, usize)> {
+    let mut stack = Vec::new();
+    let mut indices = Vec::new();
+    let mut start_index: Option<usize> = None;
+
+    for (index, c) in regexp.chars().enumerate() {
+        match c {
+            '(' => {
+                stack.push(index);
+                start_index = Some(index);
+            }
+            ')' => {
+                if let Some(start) = stack.pop() {
+                    if let Some(end) = start_index {
+                        indices.push((start, index));
+                        start_index = None;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if or_only {
+        indices.retain(|(start, end)| {
+            regexp[*start..=*end].contains('|')
+            && !regexp[*start + 1..*end].contains(|c| c == '(' || c == ')')
+            && !regexp[*start..=*end].ends_with('*')
+        });
+    }
+
+    indices
+}
+*/
+
+#[inline(never)]
+#[flame]
 pub fn is_inside_or(regexp: &String, index: usize) -> bool {
     let positions: Vec<(usize, usize)> = find_parentheses(&regexp, false);
     for (start, end) in positions {
@@ -86,28 +130,31 @@ pub fn is_inside_or(regexp: &String, index: usize) -> bool {
 }
 
 #[inline(never)]
-pub fn match_all(regexp: &String, positive_set: &Vec<String>) -> bool {
+#[flame]
+pub fn match_all(regexp: &str, positive_set: &Vec<String>) -> bool {
     positive_set
         .iter()
         .all(|x: &String| Regex::new(regexp).unwrap().is_match(x))
 }
 
-pub fn match_none(regexp: &String, negative_set: &Vec<String>) -> bool {
+#[flame]
+pub fn match_none(regexp: &str, negative_set: &Vec<String>) -> bool {
     !negative_set
         .iter()
         .any(|x: &String| Regex::new(regexp).unwrap().is_match(x))
 }
 
-/*
+#[flame]
 pub fn is_dead(regexp: &String, positive_set: &Vec<String>, negative_set: &Vec<String>) -> bool {
-    let p_regex: String = regexp.replace(r"\x00", r".*");
-    let n_regex: String = regexp.replace(r"\x00", r".{0}");
-    let pdead: bool = !match_all(&p_regex, &positive_set);
-    let ndead: bool = !match_none(&n_regex, &negative_set);
+    // let p_regex: &str = &regexp.replace(r"\x00", r".*");
+    let n_regex: &str = &regexp.replace(r"\x00", r".{0}");
+    // let pdead: bool = !match_all(p_regex, &positive_set);
+    let ndead: bool = !match_none(n_regex, &negative_set);
 
-    pdead || ndead
+    ndead
 }
 
+/*
 pub fn unroll(regexp: &String) -> String {
     // TODO: nested asterisk
     let chars: Vec<char> = regexp.chars().collect();
@@ -166,6 +213,7 @@ pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
 */
 
 #[inline(never)]
+#[flame]
 pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>) {
     let occurrences: Vec<(usize, &str)> = state.0.match_indices(r"\x00").collect();
     let all_sub: Vec<(&'static str, i32)> = vec![
@@ -200,6 +248,7 @@ pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>)
 }
 
 #[inline(never)]
+#[flame]
 pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> (String, i32) {
     let (init_cost, init_regexp) = (0, String::from(r"^\x00$"));
     let mut pq: Queue = Queue::new(vec![vec![]; 100]);
@@ -229,4 +278,44 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
         total += 1;
     }
     ("NO SOLUTION".to_string(), 0)
+}
+
+pub fn negative_examples(condition: &str, set_len: usize) -> Vec<String> {
+    let charset: &str = "01";
+    let mut examples: Vec<String> = Vec::new();
+    let mut curr_example: String = "".to_string();
+
+    if condition == "start_with_0" {
+        while examples.len() < set_len {
+            curr_example = generate(rand::thread_rng().gen_range(1..50), charset);
+            if !curr_example.starts_with("0") && !examples.contains(&curr_example) {
+                examples.push(curr_example);
+            }
+        }
+    } else if condition == "end_with_01" {
+        while examples.len() < set_len {
+            curr_example = generate(rand::thread_rng().gen_range(1..50), charset);
+            if !curr_example.ends_with("01") && !examples.contains(&curr_example) {
+                examples.push(curr_example);
+            }
+        }
+    } else if condition == "containing_0101" {
+        while examples.len() < set_len {
+            curr_example = generate(rand::thread_rng().gen_range(1..50), charset);
+            if !curr_example.contains("0101") && !examples.contains(&curr_example) {
+                examples.push(curr_example);
+            }
+        }
+    } else if condition == "begin_1_end_0" {
+        while examples.len() < set_len {
+            curr_example = generate(rand::thread_rng().gen_range(1..50), charset);
+            if !curr_example.starts_with("1") || !curr_example.ends_with("0") {
+                if !examples.contains(&curr_example) {
+                    examples.push(curr_example);
+                }
+            }
+        }
+    }
+
+    examples
 }

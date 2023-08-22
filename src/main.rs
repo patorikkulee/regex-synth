@@ -1,7 +1,13 @@
+#[allow(dead_code)]
+mod regex_bencharking;
 mod utils;
+use flame as f;
+use flamer::flame;
+use std::fs::File;
 // use std::env;
 use std::time::{Duration, Instant};
 
+#[derive(Debug)]
 struct TestCase {
     positive_set: Vec<String>,
     negative_set: Vec<String>,
@@ -21,13 +27,15 @@ impl TestCase {
         let elapsed: Duration = start.elapsed();
         let elapsed_secs: f32 = elapsed.as_secs_f32();
         println!("{:?}", state);
-        println!("took {} seconds.", elapsed_secs);
+        println!("finished in {} seconds.", elapsed_secs);
         state
     }
 }
 
+#[flame]
 fn main() {
     // env::set_var("RUST_BACKTRACE", "1");
+    let neg_set_len: usize = 1000;
     let cases: Vec<TestCase> = vec![
         // start with 0
         TestCase::new(
@@ -35,10 +43,11 @@ fn main() {
                 .iter()
                 .map(|&x| x.to_string())
                 .collect(),
-            vec!["10", "1", "11010"]
-                .iter()
-                .map(|&x| x.to_string())
-                .collect(),
+            utils::negative_examples("start_with_0", neg_set_len),
+            // vec!["10", "1", "11010"]
+            //     .iter()
+            //     .map(|&x| x.to_string())
+            //     .collect(),
         ),
         // end with 01
         TestCase::new(
@@ -46,45 +55,45 @@ fn main() {
                 .iter()
                 .map(|&x| x.to_string())
                 .collect(),
+            // utils::negative_examples("end_with_01", neg_set_len),
             vec!["100101011", "110000", "00111010"]
                 .iter()
                 .map(|&x| x.to_string())
                 .collect(),
         ),
-        // containing the substring 0101
-        TestCase::new(
-            vec!["0101", "00101001", "000101111"]
-                .iter()
-                .map(|&x| x.to_string())
-                .collect(),
-            vec![
-                "10", "1", "11010", "1001100", "00100010", "0110110", "11111",
-            ]
-            .iter()
-            .map(|&x| x.to_string())
-            .collect(),
-        ),
         // begin with 1 and end with 0
-        TestCase::new(
-            vec![
-                "11101001010010101000",
-                "100101001011101011100",
-                "10010111010010100010",
-            ]
-            .iter()
-            .map(|&x| x.to_string())
-            .collect(),
-            vec![
-                "101001010010101000111",
-                "00010101010100100010110",
-                "00010101010101001011",
-                "0011010100110000001111010100",
-                "1001010010101011111111001011",
-            ]
-            .iter()
-            .map(|&x| x.to_string())
-            .collect(),
-        ),
+        // TestCase::new(
+        //     vec![
+        //         "11101001010010101000",
+        //         "100101001011101011100",
+        //         "10010111010010100010",
+        //     ]
+        //     .iter()
+        //     .map(|&x| x.to_string())
+        //     .collect(),
+        //     utils::negative_examples("begin_1_end_0", neg_set_len),
+        // vec![
+        //     "101001010010101000111",
+        //     "00010101010100100010110",
+        //     "00010101010101001011",
+        //     "0011010100110000001111010100",
+        //     "1001010010101011111111001011",
+        // ]
+        // .iter()
+        // .map(|&x| x.to_string())
+        // .collect(),
+        // ),
+        // containing the substring 0101
+        // TestCase::new(
+        //     vec!["0101", "00101001", "000101111"]
+        //         .iter()
+        //         .map(|&x| x.to_string())
+        //         .collect(),
+        //     utils::negative_examples("containing_0101", neg_set_len), // vec!["10", "1", "11010", "1001100", "00100010", "0110110"]
+        //                                                               //     .iter()
+        //                                                               //     .map(|&x| x.to_string())
+        //                                                               //     .collect(),
+        // ),
         // // length is at least 3 and the third symbol is 0
         // TestCase::new(
         //     vec!["110", "0100010100", "000111"]
@@ -127,6 +136,9 @@ fn main() {
     for c in &cases {
         c.synth(false);
     }
+
+    // f::dump_html(File::create("flamegraph.html").unwrap()).unwrap();
+    // f::dump_json(&mut File::create("flamegraph_underapprox.json").unwrap()).unwrap();
 }
 
 #[cfg(test)]
