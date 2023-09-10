@@ -1,18 +1,18 @@
 use flamer::flame;
-use rand::Rng;
+use rand::{seq::index, Rng};
 #[allow(dead_code)]
 use random_string::generate;
 use regex::Regex;
 use std::collections::HashSet;
 
 // pub struct State {
-//     cost: i32,
+//     cost: usize,
 //     regexp: String,
 //     is_leaf: bool,
 // }
 
 // impl State {
-//     fn new(cost: i32, regexp: String) -> State {
+//     fn new(cost: usize, regexp: String) -> State {
 //         let is_leaf: bool = !regexp.contains('\x00');
 
 //         State {
@@ -25,26 +25,49 @@ use std::collections::HashSet;
 
 pub struct Queue {
     q: Vec<Vec<String>>,
+    cost: usize,
+    index: usize,
 }
 
 impl Queue {
-    fn new(q: Vec<Vec<String>>) -> Queue {
-        Queue { q }
+    pub fn new(q: Vec<Vec<String>>, cost: usize, index: usize) -> Queue {
+        Queue { q, cost, index }
     }
 
-    fn pop(&mut self) -> (String, i32) {
-        let mut cost: i32 = 0;
-        while self.q[cost.abs() as usize].is_empty() {
-            cost += 1;
+    pub fn pop(&mut self) -> (String, usize) {
+        if let Some(level) = self.q.get_mut(self.cost) {
+            if let Some(item) = level.get(self.index) {
+                self.index += 1;
+                return (item.clone(), self.cost as usize);
+            }
         }
-        (self.q[cost.abs() as usize].remove(0), -cost)
+
+        self.cost += 1;
+        self.index = 0;
+
+        if let Some(level) = self.q.get(self.cost) {
+            if let Some(item) = level.get(self.index) {
+                self.index += 1;
+                return (item.clone(), self.cost as usize);
+            }
+        }
+
+        ("QUEUE EMPTY".to_string(), 0)
+        // let mut cost: usize = 0;
+        // // while self.q[cost.abs() as usize].is_empty() {
+        // while self.q[cost].is_empty() {
+        //     cost += 1;
+        // }
+        // // (self.q[cost.abs() as usize].remove(0), -cost)
+        // (self.q[cost].remove(0), cost)
     }
 
-    fn push(&mut self, regexp: String, cost: i32) {
-        self.q[cost.abs() as usize].push(regexp)
+    pub fn push(&mut self, regexp: String, cost: usize) {
+        // self.q[cost.abs() as usize].push(regexp)
+        self.q[cost].push(regexp)
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.q.iter().all(|v| v.is_empty())
     }
 }
@@ -116,6 +139,7 @@ pub fn find_parentheses(regexp: &str, or_only: bool) -> Vec<(usize, usize)> {
 
 #[inline(never)]
 #[flame]
+// check if the extension will be implemented inside or, if yes then the modification will be different e.g., (1|2)* -> (1|2|3)*
 pub fn is_inside_or(regexp: &String, index: usize) -> bool {
     let positions: Vec<(usize, usize)> = find_parentheses(&regexp, false);
     for (start, end) in positions {
@@ -214,14 +238,14 @@ pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
 
 #[inline(never)]
 #[flame]
-pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>) {
+pub fn extend(pq: &mut Queue, state: (String, usize), table: &mut HashSet<String>) {
     let occurrences: Vec<(usize, &str)> = state.0.match_indices(r"\x00").collect();
-    let all_sub: Vec<(&'static str, i32)> = vec![
-        (r"0", -1),
-        (r"1", -1),
-        (r"(\x00)*", -1),
-        (r"\x00\x00", -1),
-        (r"(\x00|\x00)", -1),
+    let all_sub: Vec<(&'static str, usize)> = vec![
+        (r"0", 1),
+        (r"1", 1),
+        (r"(\x00)*", 1),
+        (r"\x00\x00", 1),
+        (r"(\x00|\x00)", 1),
     ];
 
     for (index, _block) in occurrences {
@@ -229,7 +253,7 @@ pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>)
             if is_inside_or(&state.0, index) && s == &r"(\x00|\x00)" {
                 let ext_regexp: &String =
                     &format!(r"{}\x00|\x00{}", &state.0[..index], &state.0[index + 4..]);
-                let extended_state: (&String, i32) = (&ext_regexp, state.1 + cost);
+                let extended_state: (&String, usize) = (&ext_regexp, state.1 + cost);
                 if !table.contains(ext_regexp) {
                     table.insert(ext_regexp.to_string());
                     pq.push(extended_state.0.to_string(), extended_state.1);
@@ -237,7 +261,7 @@ pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>)
             } else {
                 let ext_regexp: &String =
                     &format!("{}{}{}", &state.0[..index], s, &state.0[index + 4..]); // \x00算四個字元
-                let extended_state: (&String, i32) = (&ext_regexp, state.1 + cost);
+                let extended_state: (&String, usize) = (&ext_regexp, state.1 + cost);
                 if !table.contains(ext_regexp) {
                     table.insert(ext_regexp.to_string());
                     pq.push(extended_state.0.to_string(), extended_state.1);
@@ -249,15 +273,19 @@ pub fn extend(pq: &mut Queue, state: (String, i32), table: &mut HashSet<String>)
 
 #[inline(never)]
 #[flame]
-pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> (String, i32) {
+pub fn synth(
+    positive_set: &Vec<String>,
+    negative_set: &Vec<String>,
+    debug: bool,
+) -> (String, usize) {
     let (init_cost, init_regexp) = (0, String::from(r"^\x00$"));
-    let mut pq: Queue = Queue::new(vec![vec![]; 100]);
+    let mut pq: Queue = Queue::new(vec![vec![]; 10], 0, 0);
     let (mut total, mut dead, mut redundant) = (0, 0, 0);
     let mut table: HashSet<String> = HashSet::new();
 
     pq.push(init_regexp, init_cost);
     while !pq.is_empty() {
-        let curr_state: (String, i32) = pq.pop();
+        let curr_state: (String, usize) = pq.pop();
         let curr_regexp: &String = &curr_state.0;
         if debug {
             println!("{}", curr_regexp);
