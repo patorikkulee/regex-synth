@@ -4,6 +4,7 @@ mod utils;
 use flame as f;
 use flamer::flame;
 use std::fs::File;
+use utils::State;
 // use std::env;
 use std::time::{Duration, Instant};
 
@@ -21,12 +22,12 @@ impl TestCase {
         }
     }
 
-    fn synth(&self, debug: bool) -> (String, usize) {
+    fn synth(&self, debug: bool) -> utils::State {
         let start: Instant = Instant::now();
-        let state: (String, usize) = utils::synth(&self.positive_set, &self.negative_set, debug);
+        let state: utils::State = utils::synth(&self.positive_set, &self.negative_set, debug);
         let elapsed: Duration = start.elapsed();
         let elapsed_secs: f32 = elapsed.as_secs_f32();
-        println!("{:?}", state);
+        println!("{}, {}", state.regexp, state.cost);
         println!("finished in {} seconds.", elapsed_secs);
         state
     }
@@ -137,6 +138,10 @@ fn main() {
     for c in &cases[..1] {
         c.synth(false);
     }
+    // let s: State = utils::State::new(4, r"^(0(\x00)*)*$".to_string(), vec![(1, 10), (3, 8)]);
+    // let mut tmp = s.parentheses;
+    // let parentheses: Vec<(usize, usize)> = utils::update_parentheses(&mut tmp, 4, -3);
+    // println!("{:?}", parentheses)
 
     // fn find_char_occurrences(input_str: &str) -> Vec<(usize, usize)> {
     //     let left: Vec<usize> = input_str
@@ -164,22 +169,8 @@ fn main() {
     // let ts: String = "sdf(sdga(f|h)gsd)asdf".to_string();
     // println!("{:?}", utils::find_parentheses(&ts, false));
 
-    // let mut queue: utils::Queue = utils::Queue::new(
-    //     vec![
-    //         vec!["a".to_string()],
-    //         vec!["b".to_string()],
-    //         vec!["c".to_string()],
-    //     ],
-    //     0,
-    //     0,
-    // );
-    // queue.push("hi".to_string(), 2);
-    // println!("{:?}", queue.pop());
-    // println!("{:?}", queue.pop());
-    // println!("{:?}", queue.pop());
-    // println!("{:?}", queue.pop());
     f::dump_html(File::create("flamegraph.html").unwrap()).unwrap();
-    f::dump_json(&mut File::create("flamegraph.json").unwrap()).unwrap();
+    // f::dump_json(&mut File::create("flamegraph.json").unwrap()).unwrap();
 }
 
 #[cfg(test)]
@@ -190,7 +181,13 @@ mod test {
     fn start_with_0() {
         let ps: Vec<String> = vec!["01".to_string(), "01101".to_string(), "0001".to_string()];
         let ns: Vec<String> = vec!["10".to_string(), "1".to_string(), "11010".to_string()];
-        let state: (String, usize) = utils::synth(&ps, &ns, false);
-        assert_eq!(state, ("^(0(1)*)*$".to_string(), 5))
+        let state: utils::State = utils::synth(&ps, &ns, false);
+        assert_eq!(
+            state,
+            utils::State::new(5, "^(0(1)*)*$".to_string(), vec![(1, 7), (3, 5)])
+        )
     }
+
+    #[test]
+    fn update() {}
 }
