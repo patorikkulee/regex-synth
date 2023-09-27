@@ -5,6 +5,15 @@ use random_string::generate;
 use regex::Regex;
 use std::{collections::HashSet, collections::LinkedList, vec};
 
+// substitute, cost, pan_dist, pan_backwards
+const ALL_SUB: [(&'static str, usize, usize, bool); 5] = [
+    (r"0", 1, 3, true),
+    (r"1", 1, 3, true),
+    (r"(\x00)*", 1, 3, false),
+    (r"\x00\x00", 1, 4, false),
+    (r"(\x00|\x00)", 1, 7, false),
+];
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct State {
     pub cost: usize,
@@ -55,7 +64,7 @@ impl Queue {
             }
         }
 
-        State::new(0, "".to_string(), vec![])
+        State::new(0, "".to_string(), Vec::new())
         // let mut cost: usize = 0;
         // // while self.q[cost.abs() as usize].is_empty() {
         // while self.q[cost].is_empty() {
@@ -122,16 +131,23 @@ pub fn is_inside_or(s: &State, index: usize) -> bool {
 pub fn update_parentheses(
     parentheses: &mut Vec<(usize, usize)>,
     x: usize,
-    pan_dist: isize,
+    pan_dist: usize,
+    pan_backwards: bool,
 ) -> Vec<(usize, usize)> {
-    // for tuple in parentheses.iter_mut() {
-    //     if tuple.0 > x {
-    //         tuple.0 = ((tuple.0 as isize) + pan_dist) as usize;
-    //     }
-    //     if tuple.1 > x {
-    //         tuple.1 = ((tuple.1 as isize) + pan_dist) as usize;
-    //     }
-    // }
+    for tuple in parentheses.iter_mut() {
+        if tuple.0 > x && pan_backwards {
+            tuple.0 = tuple.0 - pan_dist;
+        }
+        if tuple.1 > x && pan_backwards {
+            tuple.1 = tuple.1 - pan_dist;
+        }
+        if tuple.0 > x && !pan_backwards {
+            tuple.0 = tuple.0 + pan_dist;
+        }
+        if tuple.1 > x && !pan_backwards {
+            tuple.1 = tuple.1 + pan_dist;
+        }
+    }
     parentheses.clone()
 }
 
@@ -222,16 +238,9 @@ pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
 #[flame]
 pub fn extend(pq: &mut Queue, state: State, table: &mut HashSet<String>) {
     let occurrences: &Vec<(usize, &str)> = &state.regexp.match_indices(r"\x00").collect();
-    let all_sub: Vec<(&'static str, usize, isize)> = vec![
-        (r"0", 1, -3),
-        (r"1", 1, -3),
-        (r"(\x00)*", 1, 3),
-        (r"\x00\x00", 1, 4),
-        (r"(\x00|\x00)", 1, 7),
-    ];
 
     for (index, _block) in occurrences {
-        for (s, cost, pan_dist) in &all_sub {
+        for (s, cost, pan_dist, pan_backwards) in &ALL_SUB {
             if is_inside_or(&state, *index) && s == &r"(\x00|\x00)" {
                 let ext_regexp: &String = &format!(
                     r"{}\x00|\x00{}",
@@ -239,7 +248,7 @@ pub fn extend(pq: &mut Queue, state: State, table: &mut HashSet<String>) {
                     &state.regexp[*index + 4..]
                 );
                 let mut ext_parentheses = state.parentheses.clone();
-                update_parentheses(&mut ext_parentheses, *index, 5);
+                update_parentheses(&mut ext_parentheses, *index, 5, *pan_backwards);
 
                 if !table.contains(ext_regexp) {
                     let extended_state: State =
@@ -255,9 +264,11 @@ pub fn extend(pq: &mut Queue, state: State, table: &mut HashSet<String>) {
                     &state.regexp[index + 4..]
                 ); // \x00算四個字元
                 let mut ext_parentheses = state.parentheses.clone();
-                update_parentheses(&mut ext_parentheses, *index, *pan_dist);
-                if s != &r"0" && s != &r"1" {
-                    ext_parentheses.push((*index, *index + *pan_dist as usize)) // change to link list
+                update_parentheses(&mut ext_parentheses, *index, *pan_dist, *pan_backwards);
+                if s == &r"(\x00)*" {
+                    ext_parentheses.push((*index, *index + 5))
+                } else if s == &r"(\x00|\x00)" {
+                    ext_parentheses.push((*index, *index + 10))
                 }
 
                 let extended_state: State =
@@ -275,7 +286,7 @@ pub fn extend(pq: &mut Queue, state: State, table: &mut HashSet<String>) {
 #[flame]
 pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> State {
     // let (init_cost, init_regexp) = (0, String::from(r"^\x00$"));
-    let init_state: State = State::new(0, r"^\x00$".to_string(), vec![]);
+    let init_state: State = State::new(0, r"^\x00$".to_string(), Vec::new());
     let mut pq: Queue = Queue::new(vec![vec![]; 10], 0, 0);
     let (mut total, mut dead, mut redundant) = (0, 0, 0);
     let mut table: HashSet<String> = HashSet::new();
@@ -309,7 +320,7 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
         total += 1;
         // break;
     }
-    State::new(0, "".to_string(), vec![])
+    State::new(0, "".to_string(), Vec::new())
 }
 
 pub fn negative_examples(condition: &str, set_len: usize) -> Vec<String> {

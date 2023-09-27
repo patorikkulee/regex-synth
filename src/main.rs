@@ -6,6 +6,7 @@ use flamer::flame;
 use std::fs::File;
 use utils::State;
 // use std::env;
+use std::collections::LinkedList;
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
@@ -27,7 +28,7 @@ impl TestCase {
         let state: utils::State = utils::synth(&self.positive_set, &self.negative_set, debug);
         let elapsed: Duration = start.elapsed();
         let elapsed_secs: f32 = elapsed.as_secs_f32();
-        println!("{}, {}", state.regexp, state.cost);
+        println!("{}, {}, {:?}", state.regexp, state.cost, state.parentheses);
         println!("finished in {} seconds.", elapsed_secs);
         state
     }
@@ -169,7 +170,7 @@ fn main() {
     // let ts: String = "sdf(sdga(f|h)gsd)asdf".to_string();
     // println!("{:?}", utils::find_parentheses(&ts, false));
 
-    f::dump_html(File::create("flamegraph.html").unwrap()).unwrap();
+    // f::dump_html(File::create("flamegraph.html").unwrap()).unwrap();
     // f::dump_json(&mut File::create("flamegraph.json").unwrap()).unwrap();
 }
 
@@ -184,10 +185,15 @@ mod test {
         let state: utils::State = utils::synth(&ps, &ns, false);
         assert_eq!(
             state,
-            utils::State::new(5, "^(0(1)*)*$".to_string(), vec![(1, 7), (3, 5)])
+            utils::State::new(5, "^(0(1)*)*$".to_string(), Vec::from([(1, 7), (3, 5)]))
         )
     }
 
     #[test]
-    fn update() {}
+    fn update_test() {
+        let s = State::new(0, "^(abc)\x00(def)$".to_string(), vec![(1, 5), (10, 14)]);
+        let mut ext_parentheses = s.parentheses.clone();
+        utils::update_parentheses(&mut ext_parentheses, 7, 3, true);
+        assert_eq!(ext_parentheses, vec![(1, 5), (7, 11)]);
+    }
 }
