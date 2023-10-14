@@ -3,7 +3,7 @@ use flamer::flame;
 use rand::{seq::index, Rng};
 use random_string::generate;
 use regex::Regex;
-use std::{collections::HashSet, collections::LinkedList, vec};
+use std::{collections::HashSet, collections::LinkedList, fmt::write, vec};
 
 // substitute, cost, pan_dist, pan_backwards
 const ALL_SUB: [(&'static str, usize, usize, bool); 5] = [
@@ -35,6 +35,12 @@ impl State {
     }
 }
 
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "cost: {}, regexp: {}", self.cost, self.regexp)
+    }
+}
+
 pub struct Queue {
     q: Vec<Vec<State>>,
     cost: usize,
@@ -42,15 +48,18 @@ pub struct Queue {
 }
 
 impl Queue {
-    pub fn new(q: Vec<Vec<State>>, cost: usize, index: usize) -> Queue {
+    pub fn new(max_cost: usize) -> Queue {
+        let q: Vec<Vec<State>> = vec![vec![]; max_cost];
+        let cost: usize = 0;
+        let index: usize = 0;
         Queue { q, cost, index }
     }
 
-    pub fn pop(&mut self) -> State {
-        if let Some(level) = self.q.get_mut(self.cost) {
+    pub fn pop(&mut self) -> Option<&State> {
+        if let Some(level) = self.q.get(self.cost) {
             if let Some(item) = level.get(self.index) {
                 self.index += 1;
-                return item.clone();
+                return Some(item);
             }
         }
 
@@ -60,11 +69,11 @@ impl Queue {
         if let Some(level) = self.q.get(self.cost) {
             if let Some(item) = level.get(self.index) {
                 self.index += 1;
-                return item.clone();
+                return Some(item);
             }
         }
 
-        State::new(0, "".to_string(), Vec::new())
+        None
         // let mut cost: usize = 0;
         // // while self.q[cost.abs() as usize].is_empty() {
         // while self.q[cost].is_empty() {
@@ -115,12 +124,31 @@ pub fn find_parentheses(regexp: &String, or_only: bool) -> Vec<(usize, usize)> {
 #[flame]
 // check if the extension will be implemented inside or, if yes then the modification will be different e.g., (1|2)* -> (1|2|3)*
 pub fn is_inside_or(s: &State, index: usize) -> bool {
-    for (start, end) in &s.parentheses {
-        if start < &index && end > &index {
-            if s.regexp.chars().nth(index - start) == Some('|') {
-                return true;
-            }
-        }
+    // for (start, end) in &s.parentheses {
+    //     if start < &index && end > &index {
+    // println!("{:?}", s.regexp.chars());
+    // if s.regexp.chars().nth(index - start) == Some('|') {
+    //     return true;
+    // }
+    // if s.regexp.chars().nth(index - 1) == Some('(') && s.regexp.chars().nth(index + 4) == Some('|')
+    // {
+    //     return true;
+    // } else if s.regexp.chars().nth(index - 1) == Some('|')
+    //     && s.regexp.chars().nth(index + 4) == Some('|')
+    // {
+    //     return true;
+    // } else if s.regexp.chars().nth(index - 1) == Some('|')
+    //     && s.regexp.chars().nth(index + 4) == Some(')')
+    // {
+    //     return true;
+    // }
+    // }
+    // }
+    if &s.regexp[index - 1..index + 5] == r"(\x00|"
+        || &s.regexp[index - 1..index + 5] == r"|\x00|"
+        || &s.regexp[index - 1..index + 5] == r"|\x00)"
+    {
+        return true;
     }
 
     false
@@ -133,7 +161,7 @@ pub fn update_parentheses(
     x: usize,
     pan_dist: usize,
     pan_backwards: bool,
-) -> Vec<(usize, usize)> {
+) {
     for tuple in parentheses.iter_mut() {
         if tuple.0 > x && pan_backwards {
             tuple.0 = tuple.0 - pan_dist;
@@ -148,7 +176,6 @@ pub fn update_parentheses(
             tuple.1 = tuple.1 + pan_dist;
         }
     }
-    parentheses.clone()
 }
 
 #[inline(never)]
@@ -236,13 +263,53 @@ pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
 
 #[inline(never)]
 #[flame]
-pub fn extend(pq: &mut Queue, state: State, table: &mut HashSet<String>) {
-    let occurrences: &Vec<(usize, &str)> = &state.regexp.match_indices(r"\x00").collect();
+pub fn find_occurrences(state: &State) -> Vec<(usize, &str)> {
+    state.regexp.match_indices(r"\x00").collect()
+}
 
-    for (index, _block) in occurrences {
+#[inline(never)]
+#[flame]
+pub fn is_duplicate(ext_regexp: &String, table: &mut HashSet<String>) -> bool {
+    table.contains(ext_regexp)
+}
+
+#[inline(never)]
+#[flame]
+pub fn insert_table(ext_regexp: String, table: &mut HashSet<String>) {
+    table.insert(ext_regexp);
+}
+
+#[inline(never)]
+#[flame]
+pub fn push(extended_state: State, pq: &mut Queue) {
+    pq.push(extended_state);
+}
+
+// #[inline(never)]
+// #[flame]
+// pub fn check_duplicate_then_push(
+//     pq: &mut Queue,
+//     extended_state: State,
+//     table: &mut HashSet<String>,
+// ) {
+//     if !is_duplicate(&extended_state, table) {
+//         insert_table(&extended_state, table);
+//         push(extended_state, pq);
+//     }
+// }
+
+#[inline(never)]
+#[flame]
+pub fn extend(pq: &mut Queue, state: &State, table: &mut HashSet<String>) {
+    // let occurrences: &Vec<(usize, &str)> = &state.regexp.match_indices(r"\x00").collect();
+    let occurrences: Vec<(usize, &str)> = find_occurrences(&state);
+
+    for (index, _block) in &occurrences {
+        // TODO: first occurrence/times is_duplicate called
         for (s, cost, pan_dist, pan_backwards) in &ALL_SUB {
             if is_inside_or(&state, *index) && s == &r"(\x00|\x00)" {
-                let ext_regexp: &String = &format!(
+                // println!("{}, index: {}", state, index);
+                let ext_regexp: String = format!(
                     r"{}\x00|\x00{}",
                     &state.regexp[..*index],
                     &state.regexp[*index + 4..]
@@ -250,11 +317,21 @@ pub fn extend(pq: &mut Queue, state: State, table: &mut HashSet<String>) {
                 let mut ext_parentheses = state.parentheses.clone();
                 update_parentheses(&mut ext_parentheses, *index, 5, *pan_backwards);
 
-                if !table.contains(ext_regexp) {
+                // let extended_state: State =
+                //     State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
+                // check_duplicate_then_push(pq, extended_state, table)
+
+                // if !table.contains(&ext_regexp) {
+                //     let extended_state: State =
+                //         State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
+                //     table.insert(ext_regexp);
+                //     pq.push(extended_state);
+                // }
+                if !is_duplicate(&ext_regexp, table) {
                     let extended_state: State =
-                        State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
-                    table.insert(ext_regexp.to_string());
-                    pq.push(extended_state);
+                        State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses); // TODO: flame
+                    insert_table(ext_regexp, table);
+                    push(extended_state, pq);
                 }
             } else {
                 let ext_regexp: String = format!(
@@ -271,11 +348,15 @@ pub fn extend(pq: &mut Queue, state: State, table: &mut HashSet<String>) {
                     ext_parentheses.push((*index, *index + 10))
                 }
 
-                let extended_state: State =
-                    State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
-                if !table.contains(&ext_regexp) {
-                    table.insert(ext_regexp.to_string());
-                    pq.push(extended_state);
+                // let extended_state: State =
+                //     State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
+                // check_duplicate_then_push(pq, extended_state, table)
+
+                if !is_duplicate(&ext_regexp, table) {
+                    let extended_state: State =
+                        State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
+                    insert_table(ext_regexp, table);
+                    push(extended_state, pq);
                 }
             }
         }
@@ -287,18 +368,18 @@ pub fn extend(pq: &mut Queue, state: State, table: &mut HashSet<String>) {
 pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> State {
     // let (init_cost, init_regexp) = (0, String::from(r"^\x00$"));
     let init_state: State = State::new(0, r"^\x00$".to_string(), Vec::new());
-    let mut pq: Queue = Queue::new(vec![vec![]; 10], 0, 0);
+    let mut pq: Queue = Queue::new(10);
     let (mut total, mut dead, mut redundant) = (0, 0, 0);
     let mut table: HashSet<String> = HashSet::new();
 
     pq.push(init_state);
     while !pq.is_empty() {
-        let curr_state: State = pq.pop();
+        let curr_state: State = pq.pop().unwrap().clone();
         // let curr_regexp: &String = &curr_state.0;
         if debug {
             println!(
                 "{}, {}, {:?}",
-                curr_state.regexp, curr_state.cost, curr_state.parentheses
+                curr_state.cost, curr_state.regexp, curr_state.parentheses
             );
         }
 
@@ -308,14 +389,14 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
                 && match_none(&curr_state.regexp, &negative_set)
             {
                 println!("Total: {}, Dead: {}, Redundant: {}", total, dead, redundant);
-                return curr_state;
+                return curr_state.clone();
             }
         // } else if is_dead(&curr_state.regexp, &positive_set, &negative_set) {
         //     dead += 1;
         // } else if is_redundant(&curr_regexp, &positive_set) {
         //     redundant += 1;
         } else {
-            extend(&mut pq, curr_state, &mut table);
+            extend(&mut pq, &curr_state, &mut table);
         }
         total += 1;
         // break;

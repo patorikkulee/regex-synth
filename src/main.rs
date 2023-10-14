@@ -6,7 +6,7 @@ use flamer::flame;
 use std::fs::File;
 use utils::State;
 // use std::env;
-use std::collections::LinkedList;
+use std::collections::{linked_list, LinkedList};
 use std::time::{Duration, Instant};
 
 #[derive(Debug)]
@@ -136,10 +136,36 @@ fn main() {
         // ),
     ];
 
-    for c in &cases[..1] {
+    // let s: State = State::new(
+    //     4,
+    //     r"^(((\x00|))*)*$".to_string(),
+    //     [(1, 21), (2, 19), (3, 18)].to_vec(),
+    // );
+    // utils::is_inside_or(&s, 14);
+    // let tmp = format!("{}{}{}", &s.regexp[..4], "\x00|\x00", &s.regexp[5..]);
+    // println!("{}", tmp);
+
+    // let mut list: LinkedList<u32> = LinkedList::new();
+
+    // list.push_back(0);
+    // list.push_back(1);
+    // list.push_back(2);
+
+    // let mut iter = list.iter();
+    // assert_eq!(iter.next(), Some(&0));
+    // assert_eq!(iter.next(), Some(&1));
+    // list.push_back(3);
+    // assert_eq!(iter.next(), Some(&2));
+    // assert_eq!(iter.next(), None);
+
+    for c in &cases {
         c.synth(false);
     }
+    // let tmp = "iadksjfoisdkl";
+    // println!("{}", &tmp[3..7]);
+
     // let s: State = utils::State::new(4, r"^(0(\x00)*)*$".to_string(), vec![(1, 10), (3, 8)]);
+    // println!("{}", &s.regexp[3..7] == r"(\x0");
     // let mut tmp = s.parentheses;
     // let parentheses: Vec<(usize, usize)> = utils::update_parentheses(&mut tmp, 4, -3);
     // println!("{:?}", parentheses)
@@ -170,12 +196,14 @@ fn main() {
     // let ts: String = "sdf(sdga(f|h)gsd)asdf".to_string();
     // println!("{:?}", utils::find_parentheses(&ts, false));
 
-    // f::dump_html(File::create("flamegraph.html").unwrap()).unwrap();
+    // f::dump_html(File::create("flamegraph2.html").unwrap()).unwrap();
     // f::dump_json(&mut File::create("flamegraph.json").unwrap()).unwrap();
 }
 
 #[cfg(test)]
 mod test {
+    use std::collections::LinkedList;
+
     use super::*;
 
     #[test]
@@ -196,4 +224,35 @@ mod test {
         utils::update_parentheses(&mut ext_parentheses, 7, 3, true);
         assert_eq!(ext_parentheses, vec![(1, 5), (7, 11)]);
     }
+
+    #[test]
+    fn is_inside_or_works() {
+        let s: State = State::new(
+            4,
+            "^(((\x00|\x00|\x00))*)*$".to_string(),
+            [(1, 21), (2, 19), (3, 18)].to_vec(),
+        );
+        assert!(utils::is_inside_or(&s, 14) == true);
+    }
+    // #[test]
+    // fn vec_bench() {
+    //     // Create a vector of usize with elements from 0 to 999,999
+    //     let v: Vec<usize> = (0..=9999999).collect();
+
+    //     // Iterate through the vector and assert that each element is equal to its index
+    //     for (i, &element) in v.iter().enumerate() {
+    //         assert!(element == i);
+    //     }
+    // }
+
+    // #[test]
+    // fn ll_bench() {
+    //     let v: Vec<usize> = (0..=9999999).collect();
+    //     let mut ll: LinkedList<usize> = LinkedList::new();
+    //     ll.extend(v.clone());
+
+    //     for (i, &value) in ll.iter().enumerate() {
+    //         assert!(value == v[i]);
+    //     }
+    // }
 }
