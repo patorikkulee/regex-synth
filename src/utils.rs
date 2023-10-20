@@ -3,7 +3,7 @@ use flamer::flame;
 use rand::{seq::index, Rng};
 use random_string::generate;
 use regex::Regex;
-use std::{collections::HashSet, collections::LinkedList, fmt::write, vec};
+use std::{collections::HashSet, fmt::write, vec};
 
 // substitute, cost, pan_dist, pan_backwards
 const ALL_SUB: [(&'static str, usize, usize, bool); 5] = [
@@ -72,19 +72,11 @@ impl Queue {
                 return Some(item);
             }
         }
-
+        // TODO: replace processed state with None
         None
-        // let mut cost: usize = 0;
-        // // while self.q[cost.abs() as usize].is_empty() {
-        // while self.q[cost].is_empty() {
-        //     cost += 1;
-        // }
-        // // (self.q[cost.abs() as usize].remove(0), -cost)
-        // (self.q[cost].remove(0), cost)
     }
 
     pub fn push(&mut self, s: State) {
-        // self.q[cost.abs() as usize].push(regexp)
         self.q[s.cost].push(s)
     }
 
@@ -122,28 +114,8 @@ pub fn find_parentheses(regexp: &String, or_only: bool) -> Vec<(usize, usize)> {
 
 #[inline(never)]
 #[flame]
-// check if the extension will be implemented inside or, if yes then the modification will be different e.g., (1|2)* -> (1|2|3)*
 pub fn is_inside_or(s: &State, index: usize) -> bool {
-    // for (start, end) in &s.parentheses {
-    //     if start < &index && end > &index {
-    // println!("{:?}", s.regexp.chars());
-    // if s.regexp.chars().nth(index - start) == Some('|') {
-    //     return true;
-    // }
-    // if s.regexp.chars().nth(index - 1) == Some('(') && s.regexp.chars().nth(index + 4) == Some('|')
-    // {
-    //     return true;
-    // } else if s.regexp.chars().nth(index - 1) == Some('|')
-    //     && s.regexp.chars().nth(index + 4) == Some('|')
-    // {
-    //     return true;
-    // } else if s.regexp.chars().nth(index - 1) == Some('|')
-    //     && s.regexp.chars().nth(index + 4) == Some(')')
-    // {
-    //     return true;
-    // }
-    // }
-    // }
+    // check if the extension will be implemented inside or, if yes then the modification will be different e.g., (1|2)* -> (1|2|3)*
     if &s.regexp[index - 1..index + 5] == r"(\x00|"
         || &s.regexp[index - 1..index + 5] == r"|\x00|"
         || &s.regexp[index - 1..index + 5] == r"|\x00)"
@@ -263,110 +235,47 @@ pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
 
 #[inline(never)]
 #[flame]
-pub fn find_occurrences(state: &State) -> Vec<(usize, &str)> {
-    state.regexp.match_indices(r"\x00").collect()
-}
-
-#[inline(never)]
-#[flame]
-pub fn is_duplicate(ext_regexp: &String, table: &mut HashSet<String>) -> bool {
-    table.contains(ext_regexp)
-}
-
-#[inline(never)]
-#[flame]
-pub fn insert_table(ext_regexp: String, table: &mut HashSet<String>) {
-    table.insert(ext_regexp);
-}
-
-#[inline(never)]
-#[flame]
-pub fn push(extended_state: State, pq: &mut Queue) {
-    pq.push(extended_state);
-}
-
-// #[inline(never)]
-// #[flame]
-// pub fn check_duplicate_then_push(
-//     pq: &mut Queue,
-//     extended_state: State,
-//     table: &mut HashSet<String>,
-// ) {
-//     if !is_duplicate(&extended_state, table) {
-//         insert_table(&extended_state, table);
-//         push(extended_state, pq);
-//     }
-// }
-
-#[inline(never)]
-#[flame]
 pub fn extend(pq: &mut Queue, state: &State, table: &mut HashSet<String>) {
-    // let occurrences: &Vec<(usize, &str)> = &state.regexp.match_indices(r"\x00").collect();
-    let occurrences: Vec<(usize, &str)> = find_occurrences(&state);
+    let index = &state.regexp.find(r"\x00").unwrap();
+    for (s, cost, pan_dist, pan_backwards) in &ALL_SUB {
+        let mut ext_regexp: String = String::new();
+        let mut ext_parentheses = state.parentheses.clone();
 
-    for (index, _block) in &occurrences {
-        // TODO: first occurrence/times is_duplicate called
-        for (s, cost, pan_dist, pan_backwards) in &ALL_SUB {
-            if is_inside_or(&state, *index) && s == &r"(\x00|\x00)" {
-                // println!("{}, index: {}", state, index);
-                let ext_regexp: String = format!(
-                    r"{}\x00|\x00{}",
-                    &state.regexp[..*index],
-                    &state.regexp[*index + 4..]
-                );
-                let mut ext_parentheses = state.parentheses.clone();
-                update_parentheses(&mut ext_parentheses, *index, 5, *pan_backwards);
-
-                // let extended_state: State =
-                //     State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
-                // check_duplicate_then_push(pq, extended_state, table)
-
-                // if !table.contains(&ext_regexp) {
-                //     let extended_state: State =
-                //         State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
-                //     table.insert(ext_regexp);
-                //     pq.push(extended_state);
-                // }
-                if !is_duplicate(&ext_regexp, table) {
-                    let extended_state: State =
-                        State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses); // TODO: flame
-                    insert_table(ext_regexp, table);
-                    push(extended_state, pq);
-                }
-            } else {
-                let ext_regexp: String = format!(
-                    "{}{}{}",
-                    &state.regexp[..*index],
-                    s,
-                    &state.regexp[index + 4..]
-                ); // \x00算四個字元
-                let mut ext_parentheses = state.parentheses.clone();
-                update_parentheses(&mut ext_parentheses, *index, *pan_dist, *pan_backwards);
-                if s == &r"(\x00)*" {
-                    ext_parentheses.push((*index, *index + 5))
-                } else if s == &r"(\x00|\x00)" {
-                    ext_parentheses.push((*index, *index + 10))
-                }
-
-                // let extended_state: State =
-                //     State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
-                // check_duplicate_then_push(pq, extended_state, table)
-
-                if !is_duplicate(&ext_regexp, table) {
-                    let extended_state: State =
-                        State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
-                    insert_table(ext_regexp, table);
-                    push(extended_state, pq);
-                }
+        if is_inside_or(&state, *index) && s == &r"(\x00|\x00)" {
+            ext_regexp = format!(
+                r"{}\x00|\x00{}",
+                &state.regexp[..*index],
+                &state.regexp[*index + 4..]
+            );
+            update_parentheses(&mut ext_parentheses, *index, 5, *pan_backwards);
+        } else {
+            ext_regexp = format!(
+                "{}{}{}",
+                &state.regexp[..*index],
+                s,
+                &state.regexp[index + 4..]
+            ); // \x00算四個字元
+            update_parentheses(&mut ext_parentheses, *index, *pan_dist, *pan_backwards);
+            // add new tuple if extending a substitution with parentheses
+            if s == &r"(\x00)*" {
+                ext_parentheses.push((*index, *index + 5))
+            } else if s == &r"(\x00|\x00)" {
+                ext_parentheses.push((*index, *index + 10))
             }
         }
+        if !table.contains(&ext_regexp) {
+            let extended_state: State =
+                State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
+            table.insert(ext_regexp);
+            pq.push(extended_state);
+        }
     }
+    // }
 }
 
 #[inline(never)]
 #[flame]
 pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> State {
-    // let (init_cost, init_regexp) = (0, String::from(r"^\x00$"));
     let init_state: State = State::new(0, r"^\x00$".to_string(), Vec::new());
     let mut pq: Queue = Queue::new(10);
     let (mut total, mut dead, mut redundant) = (0, 0, 0);
@@ -375,7 +284,6 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
     pq.push(init_state);
     while !pq.is_empty() {
         let curr_state: State = pq.pop().unwrap().clone();
-        // let curr_regexp: &String = &curr_state.0;
         if debug {
             println!(
                 "{}, {}, {:?}",
@@ -383,19 +291,20 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
             );
         }
 
-        // if !curr_state.regexp.contains(r"\x00") {
         if curr_state.is_leaf {
             if match_all(&curr_state.regexp, &positive_set)
                 && match_none(&curr_state.regexp, &negative_set)
             {
                 println!("Total: {}, Dead: {}, Redundant: {}", total, dead, redundant);
                 return curr_state.clone();
+                // TODO: 計算到達不同cost(20-30)的時間＋相關數據/圖
             }
         // } else if is_dead(&curr_state.regexp, &positive_set, &negative_set) {
         //     dead += 1;
         // } else if is_redundant(&curr_regexp, &positive_set) {
         //     redundant += 1;
         } else {
+            // TODO: try pruning while time to cost calculation
             extend(&mut pq, &curr_state, &mut table);
         }
         total += 1;

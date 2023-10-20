@@ -136,65 +136,9 @@ fn main() {
         // ),
     ];
 
-    // let s: State = State::new(
-    //     4,
-    //     r"^(((\x00|))*)*$".to_string(),
-    //     [(1, 21), (2, 19), (3, 18)].to_vec(),
-    // );
-    // utils::is_inside_or(&s, 14);
-    // let tmp = format!("{}{}{}", &s.regexp[..4], "\x00|\x00", &s.regexp[5..]);
-    // println!("{}", tmp);
-
-    // let mut list: LinkedList<u32> = LinkedList::new();
-
-    // list.push_back(0);
-    // list.push_back(1);
-    // list.push_back(2);
-
-    // let mut iter = list.iter();
-    // assert_eq!(iter.next(), Some(&0));
-    // assert_eq!(iter.next(), Some(&1));
-    // list.push_back(3);
-    // assert_eq!(iter.next(), Some(&2));
-    // assert_eq!(iter.next(), None);
-
     for c in &cases {
         c.synth(false);
     }
-    // let tmp = "iadksjfoisdkl";
-    // println!("{}", &tmp[3..7]);
-
-    // let s: State = utils::State::new(4, r"^(0(\x00)*)*$".to_string(), vec![(1, 10), (3, 8)]);
-    // println!("{}", &s.regexp[3..7] == r"(\x0");
-    // let mut tmp = s.parentheses;
-    // let parentheses: Vec<(usize, usize)> = utils::update_parentheses(&mut tmp, 4, -3);
-    // println!("{:?}", parentheses)
-
-    // fn find_char_occurrences(input_str: &str) -> Vec<(usize, usize)> {
-    //     let left: Vec<usize> = input_str
-    //         .char_indices()
-    //         .filter(|&(_, c)| c == '(')
-    //         .map(|(index, _)| index)
-    //         .collect();
-
-    //     let right: Vec<usize> = input_str
-    //         .char_indices()
-    //         .filter(|&(_, c)| c == ')')
-    //         .map(|(index, _)| index)
-    //         .rev()
-    //         .collect();
-
-    //     let indices: Vec<(usize, usize)> = left
-    //         .iter()
-    //         .zip(right.iter())
-    //         .map(|(&l, &r)| (l, r))
-    //         .collect();
-    //     indices
-    // }
-    // let tmp: Vec<(usize, usize)> = find_char_occurrences("sdf(sdga(f|h)gsd)asdf");
-    // println!("{:?}", tmp);
-    // let ts: String = "sdf(sdga(f|h)gsd)asdf".to_string();
-    // println!("{:?}", utils::find_parentheses(&ts, false));
 
     // f::dump_html(File::create("flamegraph2.html").unwrap()).unwrap();
     // f::dump_json(&mut File::create("flamegraph.json").unwrap()).unwrap();
