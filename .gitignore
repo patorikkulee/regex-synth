@@ -1,6 +1,5 @@
 /target
 *.html
 *.json
-*.ipynb
 *.txt
 .DS_Store
