@@ -3,6 +3,8 @@ use flamer::flame;
 use rand::{seq::index, Rng};
 use random_string::generate;
 use regex::Regex;
+use std::fmt::Display;
+use std::time::{Duration, Instant};
 use std::{collections::HashSet, fmt::write, vec};
 
 // substitute, cost, pan_dist, pan_backwards
@@ -55,11 +57,11 @@ impl Queue {
         Queue { q, cost, index }
     }
 
-    pub fn pop(&mut self) -> Option<&State> {
+    pub fn pop(&mut self) -> Option<State> {
         if let Some(level) = self.q.get(self.cost) {
             if let Some(item) = level.get(self.index) {
                 self.index += 1;
-                return Some(item);
+                return Some(item.clone());
             }
         }
 
@@ -69,10 +71,26 @@ impl Queue {
         if let Some(level) = self.q.get(self.cost) {
             if let Some(item) = level.get(self.index) {
                 self.index += 1;
-                return Some(item);
+                return Some(item.clone());
             }
         }
-        // TODO: replace processed state with None
+        None
+    }
+
+    pub fn pop_remove(&mut self) -> Option<State> {
+        if self.cost < self.q.len() {
+            if !self.q[self.cost].is_empty() {
+                return Some(self.q[self.cost].remove(0).clone());
+            }
+        }
+
+        self.cost += 1;
+
+        if self.cost < self.q.len() {
+            // && self.index < self.q[self.cost].len()
+            return Some(self.q[self.cost].remove(0).clone());
+        }
+
         None
     }
 
@@ -175,7 +193,6 @@ pub fn is_dead(regexp: &String, positive_set: &Vec<String>, negative_set: &Vec<S
     ndead
 }
 
-/*
 pub fn unroll(regexp: &String) -> String {
     // TODO: nested asterisk
     let chars: Vec<char> = regexp.chars().collect();
@@ -231,15 +248,14 @@ pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
 
     false
 }
-*/
 
 #[inline(never)]
 #[flame]
 pub fn extend(pq: &mut Queue, state: &State, table: &mut HashSet<String>) {
-    let index = &state.regexp.find(r"\x00").unwrap();
+    let index: &usize = &state.regexp.find(r"\x00").unwrap();
     for (s, cost, pan_dist, pan_backwards) in &ALL_SUB {
-        let mut ext_regexp: String = String::new();
-        let mut ext_parentheses = state.parentheses.clone();
+        let ext_regexp: String;
+        let mut ext_parentheses: Vec<(usize, usize)> = state.parentheses.clone();
 
         if is_inside_or(&state, *index) && s == &r"(\x00|\x00)" {
             ext_regexp = format!(
@@ -270,20 +286,24 @@ pub fn extend(pq: &mut Queue, state: &State, table: &mut HashSet<String>) {
             pq.push(extended_state);
         }
     }
-    // }
 }
 
 #[inline(never)]
 #[flame]
 pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> State {
     let init_state: State = State::new(0, r"^\x00$".to_string(), Vec::new());
-    let mut pq: Queue = Queue::new(10);
+    let mut pq: Queue = Queue::new(12);
     let (mut total, mut dead, mut redundant) = (0, 0, 0);
     let mut table: HashSet<String> = HashSet::new();
 
+    let mut curr_cost: usize = 0;
+    let start: Instant = Instant::now();
+    let mut elapsed: f32;
+    println!("cost,sec,state_num");
+
     pq.push(init_state);
     while !pq.is_empty() {
-        let curr_state: State = pq.pop().unwrap().clone();
+        let curr_state: State = pq.pop_remove().unwrap(); // modify pop() or pop_remove() here
         if debug {
             println!(
                 "{}, {}, {:?}",
@@ -294,21 +314,25 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
         if curr_state.is_leaf {
             if match_all(&curr_state.regexp, &positive_set)
                 && match_none(&curr_state.regexp, &negative_set)
+                && false
             {
                 println!("Total: {}, Dead: {}, Redundant: {}", total, dead, redundant);
                 return curr_state.clone();
-                // TODO: 計算到達不同cost(20-30)的時間＋相關數據/圖
             }
         // } else if is_dead(&curr_state.regexp, &positive_set, &negative_set) {
         //     dead += 1;
-        // } else if is_redundant(&curr_regexp, &positive_set) {
+        // } else if is_redundant(&curr_state.regexp, &positive_set) {
         //     redundant += 1;
         } else {
-            // TODO: try pruning while time to cost calculation
             extend(&mut pq, &curr_state, &mut table);
         }
         total += 1;
         // break;
+        if curr_state.cost > curr_cost {
+            elapsed = start.elapsed().as_secs_f32();
+            curr_cost = curr_state.cost;
+            println!("{},{},{}", curr_cost, elapsed, total);
+        }
     }
     State::new(0, "".to_string(), Vec::new())
 }
