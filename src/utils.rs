@@ -4,6 +4,8 @@ use rand::{seq::index, Rng};
 use random_string::generate;
 use regex::Regex;
 use std::fmt::Display;
+use std::mem::replace;
+use std::string;
 use std::time::{Duration, Instant};
 use std::{collections::HashSet, fmt::write, vec};
 
@@ -22,10 +24,16 @@ pub struct State {
     pub regexp: String,
     is_leaf: bool,
     pub parentheses: Vec<(usize, usize)>,
+    pub route: Vec<String>,
 }
 
 impl State {
-    pub fn new(cost: usize, regexp: String, parentheses: Vec<(usize, usize)>) -> State {
+    pub fn new(
+        cost: usize,
+        regexp: String,
+        parentheses: Vec<(usize, usize)>,
+        route: Vec<String>,
+    ) -> State {
         let is_leaf: bool = !regexp.contains(r"\x00");
 
         State {
@@ -33,16 +41,22 @@ impl State {
             regexp,
             is_leaf,
             parentheses,
+            route,
         }
     }
 }
 
-impl std::fmt::Display for State {
+impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "cost: {}, regexp: {}", self.cost, self.regexp)
+        write!(
+            f,
+            "cost: {}, regexp: {}, route: {:?}",
+            self.cost, self.regexp, self.route
+        )
     }
 }
 
+#[derive(Debug)]
 pub struct Queue {
     q: Vec<Vec<State>>,
     cost: usize,
@@ -65,6 +79,7 @@ impl Queue {
             }
         }
 
+        self.q[self.cost] = replace(&mut self.q[self.cost], vec![]);
         self.cost += 1;
         self.index = 0;
 
@@ -77,29 +92,37 @@ impl Queue {
         None
     }
 
-    pub fn pop_remove(&mut self) -> Option<State> {
-        if self.cost < self.q.len() {
-            if !self.q[self.cost].is_empty() {
-                return Some(self.q[self.cost].remove(0).clone());
-            }
-        }
-
-        self.cost += 1;
-
-        if self.cost < self.q.len() {
-            // && self.index < self.q[self.cost].len()
-            return Some(self.q[self.cost].remove(0).clone());
-        }
-
-        None
-    }
-
     pub fn push(&mut self, s: State) {
         self.q[s.cost].push(s)
     }
 
     pub fn is_empty(&self) -> bool {
         self.q.iter().all(|v| v.is_empty())
+    }
+}
+
+#[derive(Debug)]
+pub struct TestCase {
+    pub positive_set: Vec<String>,
+    pub negative_set: Vec<String>,
+}
+
+impl TestCase {
+    pub fn new(positive_set: Vec<String>, negative_set: Vec<String>) -> TestCase {
+        TestCase {
+            positive_set,
+            negative_set,
+        }
+    }
+
+    pub fn synth(&self, debug: bool, pruning: bool) -> State {
+        let start: Instant = Instant::now();
+        let state: State = synth(&self.positive_set, &self.negative_set, debug, pruning);
+        let elapsed: Duration = start.elapsed();
+        let elapsed_secs: f32 = elapsed.as_secs_f32();
+        println!("{}", state);
+        println!("finished in {} seconds.", elapsed_secs);
+        state
     }
 }
 
@@ -176,6 +199,7 @@ pub fn match_all(regexp: &str, positive_set: &Vec<String>) -> bool {
         .all(|x: &String| Regex::new(regexp).unwrap().is_match(x))
 }
 
+#[inline(never)]
 #[flame]
 pub fn match_none(regexp: &str, negative_set: &Vec<String>) -> bool {
     !negative_set
@@ -183,16 +207,19 @@ pub fn match_none(regexp: &str, negative_set: &Vec<String>) -> bool {
         .any(|x: &String| Regex::new(regexp).unwrap().is_match(x))
 }
 
+#[inline(never)]
 #[flame]
 pub fn is_dead(regexp: &String, positive_set: &Vec<String>, negative_set: &Vec<String>) -> bool {
-    // let p_regex: &str = &regexp.replace(r"\x00", r".*");
+    let p_regex: &str = &regexp.replace(r"\x00", r".*");
     let n_regex: &str = &regexp.replace(r"\x00", r".{0}");
-    // let pdead: bool = !match_all(p_regex, &positive_set);
+    let pdead: bool = !match_all(p_regex, &positive_set);
     let ndead: bool = !match_none(n_regex, &negative_set);
 
-    ndead
+    pdead || ndead
 }
 
+#[inline(never)]
+#[flame]
 pub fn unroll(regexp: &String) -> String {
     // TODO: nested asterisk
     let chars: Vec<char> = regexp.chars().collect();
@@ -215,6 +242,8 @@ pub fn unroll(regexp: &String) -> String {
     result
 }
 
+#[inline(never)]
+#[flame]
 pub fn split(regexp: &String) -> Vec<String> {
     let mut results: Vec<String> = Vec::new();
     let positions: Vec<(usize, usize)> = find_parentheses(&regexp, true);
@@ -236,12 +265,14 @@ pub fn split(regexp: &String) -> Vec<String> {
     results
 }
 
+#[inline(never)]
+#[flame]
 pub fn is_redundant(regexp: &String, positive_set: &Vec<String>) -> bool {
     let results: Vec<String> = split(&unroll(&regexp));
 
     for i in &results {
         let p_regex: String = i.replace(r"\x00", r".*");
-        if !match_all(&p_regex, &positive_set) {
+        if match_none(&p_regex, &positive_set) {
             return true;
         }
     }
@@ -256,12 +287,14 @@ pub fn extend(pq: &mut Queue, state: &State, table: &mut HashSet<String>) {
     for (s, cost, pan_dist, pan_backwards) in &ALL_SUB {
         let ext_regexp: String;
         let mut ext_parentheses: Vec<(usize, usize)> = state.parentheses.clone();
+        let mut ext_route: Vec<String> = state.route.clone();
+        ext_route.push(state.regexp.clone());
 
         if is_inside_or(&state, *index) && s == &r"(\x00|\x00)" {
             ext_regexp = format!(
                 r"{}\x00|\x00{}",
                 &state.regexp[..*index],
-                &state.regexp[*index + 4..]
+                &state.regexp[index + 4..]
             );
             update_parentheses(&mut ext_parentheses, *index, 5, *pan_backwards);
         } else {
@@ -280,8 +313,12 @@ pub fn extend(pq: &mut Queue, state: &State, table: &mut HashSet<String>) {
             }
         }
         if !table.contains(&ext_regexp) {
-            let extended_state: State =
-                State::new(state.cost + cost, ext_regexp.to_string(), ext_parentheses);
+            let extended_state: State = State::new(
+                state.cost + cost,
+                ext_regexp.to_string(),
+                ext_parentheses,
+                ext_route,
+            );
             table.insert(ext_regexp);
             pq.push(extended_state);
         }
@@ -290,10 +327,15 @@ pub fn extend(pq: &mut Queue, state: &State, table: &mut HashSet<String>) {
 
 #[inline(never)]
 #[flame]
-pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool) -> State {
-    let init_state: State = State::new(0, r"^\x00$".to_string(), Vec::new());
-    let mut pq: Queue = Queue::new(12);
-    let (mut total, mut dead, mut redundant) = (0, 0, 0);
+pub fn synth(
+    positive_set: &Vec<String>,
+    negative_set: &Vec<String>,
+    debug: bool,
+    pruning: bool,
+) -> State {
+    let init_state: State = State::new(0, r"^\x00$".to_string(), Vec::new(), Vec::new());
+    let mut pq: Queue = Queue::new(13);
+    let (mut total, mut leaf, mut dead, mut redundant) = (0, 0, 0, 0);
     let mut table: HashSet<String> = HashSet::new();
 
     let mut curr_cost: usize = 0;
@@ -303,26 +345,39 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
 
     pq.push(init_state);
     while !pq.is_empty() {
-        let curr_state: State = pq.pop_remove().unwrap(); // modify pop() or pop_remove() here
-        if debug {
-            println!(
-                "{}, {}, {:?}",
-                curr_state.cost, curr_state.regexp, curr_state.parentheses
-            );
-        }
+        let curr_state: State = pq.pop().unwrap();
+        // if debug {
+        //     println!(
+        //         "{}, {}, {:?}",
+        //         curr_state.cost, curr_state.regexp, curr_state.parentheses
+        //     );
+        // }
 
         if curr_state.is_leaf {
+            leaf += 1;
             if match_all(&curr_state.regexp, &positive_set)
                 && match_none(&curr_state.regexp, &negative_set)
-                && false
             {
-                println!("Total: {}, Dead: {}, Redundant: {}", total, dead, redundant);
+                println!(
+                    "Total: {}, Leaf: {}, Dead: {}, Redundant: {}",
+                    total, leaf, dead, redundant
+                );
                 return curr_state.clone();
             }
-        // } else if is_dead(&curr_state.regexp, &positive_set, &negative_set) {
-        //     dead += 1;
-        // } else if is_redundant(&curr_state.regexp, &positive_set) {
-        //     redundant += 1;
+        } else if pruning {
+            if is_dead(&curr_state.regexp, &positive_set, &negative_set) {
+                if debug {
+                    println!("{} is dead", &curr_state.regexp);
+                }
+                dead += 1;
+            } else if is_redundant(&curr_state.regexp, &positive_set) {
+                if debug {
+                    println!("{} is redundant", &curr_state.regexp);
+                }
+                redundant += 1;
+            } else {
+                extend(&mut pq, &curr_state, &mut table);
+            }
         } else {
             extend(&mut pq, &curr_state, &mut table);
         }
@@ -334,13 +389,13 @@ pub fn synth(positive_set: &Vec<String>, negative_set: &Vec<String>, debug: bool
             println!("{},{},{}", curr_cost, elapsed, total);
         }
     }
-    State::new(0, "".to_string(), Vec::new())
+    State::new(0, "".to_string(), Vec::new(), Vec::new())
 }
 
 pub fn negative_examples(condition: &str, set_len: usize) -> Vec<String> {
     let charset: &str = "01";
     let mut examples: Vec<String> = Vec::new();
-    let mut curr_example: String = "".to_string();
+    let mut curr_example: String;
 
     if condition == "start_with_0" {
         while examples.len() < set_len {
@@ -375,4 +430,23 @@ pub fn negative_examples(condition: &str, set_len: usize) -> Vec<String> {
     }
 
     examples
+}
+
+#[inline(never)]
+#[flame]
+pub fn get_cost(regexp: String) -> usize {
+    let init_state: State = State::new(0, r"^\x00$".to_string(), Vec::new(), Vec::new());
+    let mut pq: Queue = Queue::new(100);
+    let mut table: HashSet<String> = HashSet::new();
+
+    pq.push(init_state);
+    while !pq.is_empty() {
+        let curr_state: State = pq.pop().unwrap();
+        if curr_state.regexp == regexp {
+            return curr_state.cost;
+        } else if !curr_state.is_leaf {
+            extend(&mut pq, &curr_state, &mut table);
+        }
+    }
+    0
 }
